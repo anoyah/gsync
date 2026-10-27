@@ -56,6 +56,9 @@ func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
 	}
 	fmt.Fprintf(w, "[3/4] 分析提交差异 本地领先 %d，远程领先 %d\n", a, b)
 	action := "无需操作"
+	if a > 0 && b == 0 && o.NoPush {
+		action = "保留本地提交（--no-push）"
+	}
 	if b > 0 {
 		action = "Fast-forward"
 		if a > 0 {
@@ -117,7 +120,7 @@ func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
 		return failure(4, fmt.Errorf("当前分支发生变化，已停止"))
 	}
 	if a > 0 && !o.NoPush {
-		if _, err := r.Run(ctx, "-c", "push.followTags=false", "push", "--no-follow-tags", "--", r.Remote, "HEAD:"+r.Target); err != nil {
+		if _, err := r.Run(ctx, "-c", "push.followTags=false", "push", "--no-follow-tags", "--recurse-submodules=no", "--", r.Remote, "HEAD:"+r.Target); err != nil {
 			return failure(8, fmt.Errorf("Push 失败；请检查权限或重新运行 gsync 获取最新远程状态: %w", err))
 		}
 	}
@@ -125,6 +128,11 @@ func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
 	if err != nil {
 		return failure(1, err)
 	}
-	fmt.Fprintf(w, "[4/4] 同步完成\n本地领先：%d，远程领先：%d\n", a, b)
+	if o.NoPush && a > 0 {
+		fmt.Fprintln(w, "[4/4] 远程更新已整合，按 --no-push 保留本地提交")
+	} else {
+		fmt.Fprintln(w, "[4/4] 同步完成")
+	}
+	fmt.Fprintf(w, "本地领先：%d，远程领先：%d\n", a, b)
 	return nil
 }

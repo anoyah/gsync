@@ -233,3 +233,81 @@ func TestSubdirectory(t *testing.T) {
 	}
 	execute(t, dir, Options{}, 0)
 }
+
+func TestDryRunPreservesHistory(t *testing.T) {
+	for _, diverged := range []bool{false, true} {
+		t.Run(map[bool]string{false: "ahead", true: "diverged"}[diverged], func(t *testing.T) {
+			f := setup(t)
+			f.commit(f.local, "local", "local")
+			if diverged {
+				f.commit(f.peer, "remote", "remote")
+				f.git(f.peer, "push")
+			}
+			local := f.git(f.local, "rev-parse", "HEAD")
+			remote := f.git(f.remote, "rev-parse", "topic")
+			execute(t, f.local, Options{DryRun: true}, 0)
+			if f.git(f.local, "rev-parse", "HEAD") != local || f.git(f.remote, "rev-parse", "topic") != remote {
+				t.Fatal("dry-run changed history")
+			}
+			if f.git(f.local, "rev-parse", "@{upstream}") != remote {
+				t.Fatal("dry-run did not fetch")
+			}
+		})
+	}
+}
+
+func TestNoPushRebases(t *testing.T) {
+	f := setup(t)
+	f.commit(f.local, "local", "local")
+	f.commit(f.peer, "remote", "remote")
+	f.git(f.peer, "push")
+	remote := f.git(f.remote, "rev-parse", "topic")
+	out := execute(t, f.local, Options{NoPush: true}, 0)
+	if f.git(f.remote, "rev-parse", "topic") != remote {
+		t.Fatal("unexpected push")
+	}
+	if f.git(f.local, "rev-list", "--left-right", "--count", "HEAD...@{upstream}") != "1\t0" {
+		t.Fatal("remote updates were not integrated")
+	}
+	if !strings.Contains(out, "保留本地提交") {
+		t.Fatal(out)
+	}
+}
+
+func TestCustomFetchRefspec(t *testing.T) {
+	f := setup(t)
+	f.git(f.local, "config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/custom/*")
+	f.git(f.local, "fetch")
+	f.commit(f.peer, "remote", "remote")
+	f.git(f.peer, "push")
+	execute(t, f.local, Options{}, 0)
+	if f.git(f.local, "rev-parse", "HEAD") != f.git(f.remote, "rev-parse", "topic") {
+		t.Fatal("custom upstream not synchronized")
+	}
+}
+
+func TestLinkedWorktree(t *testing.T) {
+	f := setup(t)
+	dir := filepath.Join(f.root, "linked worktree")
+	f.git(f.local, "worktree", "add", "-b", "linked", dir, "topic")
+	f.git(dir, "branch", "--set-upstream-to=origin/topic")
+	f.commit(f.peer, "remote", "remote")
+	f.git(f.peer, "push")
+	execute(t, dir, Options{}, 0)
+	if f.git(dir, "rev-parse", "HEAD") != f.git(f.remote, "rev-parse", "topic") {
+		t.Fatal("worktree not synchronized")
+	}
+}
+
+func TestStagedChangesPreserved(t *testing.T) {
+	f := setup(t)
+	if err := os.WriteFile(filepath.Join(f.local, "base"), []byte("staged"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	f.git(f.local, "add", "base")
+	before := f.git(f.local, "diff", "--cached")
+	execute(t, f.local, Options{}, 4)
+	if f.git(f.local, "diff", "--cached") != before {
+		t.Fatal("staged changes modified")
+	}
+}

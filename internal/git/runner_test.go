@@ -3,6 +3,7 @@ package git
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 )
@@ -18,5 +19,12 @@ func TestRedact(t *testing.T) {
 	got := Redact("fatal https://user:secret@example.com/repo and http://token@example.org/repo")
 	if got != "fatal https://[redacted]@example.com/repo and http://[redacted]@example.org/repo" {
 		t.Fatal(got)
+	}
+}
+
+func TestErrorRedactsArguments(t *testing.T) {
+	err := &Error{Args: []string{"fetch", "https://user:secret@example.com/repo"}, Output: "https://token@example.com/repo", Cause: errors.New("failed")}
+	if strings.Contains(err.Error(), "secret") || strings.Contains(err.Error(), "token") {
+		t.Fatal("credentials leaked")
 	}
 }

@@ -68,8 +68,22 @@ gsync --help
 
 ## 平台与限制
 
-代码面向 macOS、Linux、Windows；当前开发环境为 macOS，其他平台尚未实机验证。集成测试使用本地 bare remote，不访问公网。尚未提供发布包或后台定时同步。
+代码面向 macOS、Linux、Windows；当前开发环境为 macOS，其他平台尚未实机验证。集成测试使用本地 bare remote，不访问公网。可在本地生成六个平台的发布包，尚未公开发布或提供后台定时同步。
 
-没有仓库级互斥锁：请勿对同一仓库同时执行 gsync 或其他会修改历史的 Git 操作。检查和写入之间仍存在竞争窗口。Git hooks、签名及 credential helper 由 Git 运行，需自行确保可信。支持继承标准输入，标准输出和错误被捕获；优先使用现成 credential helper / SSH agent。硬件密钥、交互式密码和平台终端行为尚未全面验证。
+没有仓库级互斥锁：请勿对同一仓库同时执行 gsync 或其他会修改历史的 Git 操作。检查和写入之间仍存在竞争窗口。Git hooks、签名及 credential helper 由 Git 运行，需自行确保可信。支持继承标准输入，标准输出和错误被捕获；优先使用现成 credential helper / SSH agent。硬件密钥、交互式密码和平台终端行为尚未全面验证。Push 不递归推送子模块，子模块应单独管理。
 
 错误日志会隐藏 HTTP(S) URL 的 userinfo 凭据；请勿在 URL 路径、查询参数或自定义 Git 输出中放置令牌。提交 Bug 时请提供系统、Go/Git 版本、脱敏后的 `gsync --verbose` 输出，以及可用本地测试仓库复现的步骤，勿附凭据。
+
+## 构建发布包
+
+在项目根目录执行：
+
+```sh
+go run ./cmd/release --version v0.1.0
+```
+
+生成 `dist/v0.1.0/`，包含 macOS / Linux / Windows 的 amd64、arm64 共六个压缩包，以及 `SHA256SUMS`。macOS 和 Linux 使用 tar.gz，Windows 使用 zip；每个包包含可执行文件与 README。构建关闭 CGO、注入版本并移除本地源码路径，不依赖额外打包工具。已有同版本目录时拒绝覆盖，失败时清理中间产物。可用 `--out <目录>` 指定输出位置。
+
+校验包文件：macOS 使用 `shasum -a 256 -c SHA256SUMS`，Linux 使用 `sha256sum -c SHA256SUMS`，Windows 可用 PowerShell `Get-FileHash <压缩包> -Algorithm SHA256` 与清单比对。解压后将可执行文件放入 PATH 目录，运行 `gsync --version` 检查。
+
+GitHub Actions 的 `Build release archives` 工作流可手动输入版本并下载构建产物；它只生成 artifact，不自动创建 Release 或上传发布资产。跨平台编译通过不代表在所有系统上完成运行验证，运行验证以各平台 CI 结果为准。

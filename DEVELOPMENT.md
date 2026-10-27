@@ -519,7 +519,9 @@ gsync 没有执行强制推送。
 - [ ] 验证 macOS、Linux、Windows。
 - [x] 编写 README、安装与卸载说明。
 - [x] 添加 CI 自动测试。
-- [ ] 生成多平台二进制发布包。
+- [x] 生成多平台二进制发布包。
+
+当前进度：已生成 macOS、Linux、Windows 的 amd64 / arm64 共六个平台发布包和 SHA-256 清单；macOS arm64 已运行验证。Linux、Windows 的实际运行验证仍待对应平台 CI 执行，不因交叉编译通过而视为完成。
 
 ### M3：可选增强
 

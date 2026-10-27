@@ -26,7 +26,7 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	return fmt.Sprintf("git %s: %s (%v)", strings.Join(e.Args, " "), e.Output, e.Cause)
+	return Redact(fmt.Sprintf("git %s: %s (%v)", strings.Join(e.Args, " "), e.Output, e.Cause))
 }
 func (e *Error) Unwrap() error { return e.Cause }
 
