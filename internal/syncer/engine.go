@@ -57,7 +57,7 @@ func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
 	fmt.Fprintf(w, "[3/4] 分析提交差异 本地领先 %d，远程领先 %d\n", a, b)
 	action := "无需操作"
 	if a > 0 && b == 0 && o.NoPush {
-		action = "保留本地提交（--no-push）"
+		action = "保留本地提交，不推送"
 	}
 	if b > 0 {
 		action = "Fast-forward"
@@ -73,7 +73,7 @@ func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
 		}
 	}
 	if a > 0 && b > 0 && o.NoRebase {
-		return failure(4, fmt.Errorf("双方已分叉，--no-rebase 禁止自动整合；请手动处理后重试"))
+		return failure(4, fmt.Errorf("双方已分叉，禁止自动 Rebase；请手动处理分叉后重试"))
 	}
 	if o.DryRun {
 		fmt.Fprintf(w, "计划：%s\nDry-run：已 Fetch，未执行整合或 Push。\n", action)
@@ -129,10 +129,15 @@ func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
 		return failure(1, err)
 	}
 	if o.NoPush && a > 0 {
-		fmt.Fprintln(w, "[4/4] 远程更新已整合，按 --no-push 保留本地提交")
+		fmt.Fprintln(w, "[4/4] 远程更新已检查，保留本地提交，不推送")
 	} else {
 		fmt.Fprintln(w, "[4/4] 同步完成")
 	}
 	fmt.Fprintf(w, "本地领先：%d，远程领先：%d\n", a, b)
+	head, err := r.Run(ctx, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return failure(1, err)
+	}
+	fmt.Fprintln(w, "当前提交：", head)
 	return nil
 }

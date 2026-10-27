@@ -13,6 +13,7 @@ func TestFlags(t *testing.T) {
 	}{
 		{[]string{"--help"}, 0}, {[]string{"-h"}, 0}, {[]string{"--version"}, 0},
 		{[]string{"--unknown"}, 2}, {[]string{"--timeout=0"}, 2}, {[]string{"--timeout=bad"}, 2}, {[]string{"extra"}, 2},
+		{[]string{"--interval=0"}, 2}, {[]string{"--interval=-1s"}, 2}, {[]string{"--interval=bad"}, 2},
 	} {
 		var out bytes.Buffer
 		if got := run(context.Background(), tc.args, &out, &out); got != tc.code {

@@ -1,89 +1,85 @@
 # gsync
 
-在当前 Git 工作树（或子目录）运行的安全自动同步 CLI。使用 Go 标准库与系统 Git，无云服务或运行时依赖包。
+持续监听当前 Git 仓库的上游分支，自动从服务器拉取更新。默认在前台运行，每轮完成后等待 30 秒再次检查，Ctrl+C 停止。使用 Go 标准库和系统 Git，采用跨平台轮询。
 
-## 安装与开发
+**只拉取，不自动提交、不 Push、不 Rebase。** 远程更新仅通过 Fast-forward 整合；未提交文件、本地提交和分叉历史不会被自动覆盖。
 
-需要 Git 2.27 或更新版本；源码构建需要 Go 1.22 或更新版本。
+## 安装
+
+运行需要 Git 2.27+，源码构建需要 Go 1.22+：
 
 ```sh
 go build -o gsync .
 go install .
-go test ./...
-go vet ./...
 ```
 
-`go install .` 安装到 `GOBIN` 或 `$(go env GOPATH)/bin`，请将对应目录加入 PATH。卸载时删除安装的 `gsync` 二进制即可。当前 module 为本地名称 `gsync`；发布仓库确定后再设置真实 module path，支持远程 `go install <module>@latest`。可用 `go build -ldflags '-X main.version=0.1.0' -o gsync .` 设置版本。
+`go install .` 安装到 `GOBIN` 或 `$(go env GOPATH)/bin`，需将对应目录加入 PATH。卸载时删除安装的二进制。当前 module 为本地名称 `gsync`，远程安装地址尚未配置。
 
 ## 使用
 
 ```sh
 cd /path/to/repository
-gsync
-gsync --dry-run
-gsync --no-push
-gsync --no-rebase
-gsync --verbose --timeout 30s
+gsync                         # 持续监听，自动拉取
+gsync --interval 5s            # 每轮完成后等待 5 秒
+gsync --once                  # 只检查并拉取一轮
+gsync --dry-run               # 只 Fetch 并预览一轮，不整合提交
+gsync --verbose --timeout 30s  # 详细日志；每条 Git 命令超时 30 秒
 gsync --version
 gsync --help
 ```
 
-默认每条 Git 命令超时 2 分钟，支持 Ctrl+C / SIGTERM 取消。`-v` 等价于 `--verbose`，`-h` 等价于 `--help`。
+`-v` 等价于 `--verbose`，`-h` 等价于 `--help`。`--interval` 必须大于 0，默认 `30s`；`--timeout` 默认 `2m`。启动后立即检查一次，每轮执行结束才开始等待间隔，不会重叠执行同步。检测延迟取决于间隔和 Git 执行耗时。相同状态和错误不会持续刷屏，`--verbose` 可显示每轮诊断。
 
-| 状态 | 行为 |
+默认监听当前分支的已配置上游。切换分支后，下一轮重新识别分支与上游。`--dry-run` 固定只执行一轮，会更新远程跟踪引用及 FETCH_HEAD，但不修改工作区、整合提交或推送。Fetch 不 prune、不自动获取标签；上游分支被删除时报告错误，等待修复配置。
+
+| 仓库状态 | 监听行为 |
 | --- | --- |
-| 完全一致 | 无需修改 |
-| 本地领先 | 普通 Push 到当前分支的上游目标 |
-| 远程领先 | Fast-forward |
-| 双方分叉 | Rebase 后普通 Push |
+| 本地与远程一致 | 等待下一轮 |
+| 仅远程领先 | Fast-forward 拉取 |
+| 仅本地领先 | 保留本地提交，不推送 |
+| 双方分叉 | 暂停本轮，人工处理后恢复 |
+| 存在未提交或未跟踪文件 | 暂停本轮，保留修改，干净后自动恢复 |
+| 存在 Git 操作、锁或 detached HEAD | 暂停本轮，处理后自动恢复 |
+| 缺少上游、网络/认证失败或命令超时 | 提示并在下一轮重试 |
+| 非 Git 仓库、Git 不可用或 Fast-forward 失败 | 退出，处理后重启 |
 
-**默认 Rebase 会重写本地未推送提交的 SHA，可能改变提交拓扑。** 共享提交或需要保留拓扑时使用 `--no-rebase`，分叉后会停止并提示人工处理。`--no-push` 仍会整合远程更新。
-
-`--dry-run` 会 Fetch，因此会更新远程跟踪引用及 Git 获取信息；不执行 Merge、Rebase 或 Push。Fetch 默认不 prune。远程分支已删除时停止，不自动重建。
+这版取代旧版的一次性双向同步 CLI。`--no-push` 和 `--no-rebase` 已移除，这两个安全限制现在始终启用。
 
 ## 安全与恢复
 
-未提交修改（包括未跟踪文件和子模块修改）、detached HEAD、正在进行的 Git 操作和常见锁均会阻止同步。不自动 stash、add 或 commit，不强推，不执行 `reset --hard` 或 `clean`，不修改用户 Git 配置。Push 明确指定上游分支，不受 `push.default` 影响，也不附带推送标签。
+不自动 stash、add、commit 或修改 Git 配置，不强推，不执行 `reset --hard` 或 `clean`。工作区、暂存区、未跟踪文件及子模块修改均受检查。
 
-- 工作区不干净：运行 `git status`，提交修改或自行 `git stash` 后重试。
+- 工作区有修改：运行 `git status`，自行保存、提交或 stash；工作区干净后监听会恢复。
 - 缺少上游：检查 `git remote -v`，用 `git branch --set-upstream-to=<remote>/<branch>` 设置。
-- Rebase 冲突：尝试自动 `git rebase --abort`；失败会保留原始诊断并提示手动运行 `git status` 和 `git rebase --abort`。取消时恢复同样使用独立超时，请务必检查仓库状态。
-- Push 被拒绝：检查权限并重新运行以获取远程变化，绝不自动强推。
-- Fetch 失败：检查网络与现有 Git 认证；凭据管理交由系统 Git。
+- 双方分叉：自行决定如何整合历史；监听不会 Rebase 或 Merge 分叉，处理后下一轮继续。
+- 网络或认证错误：修复现有 Git 凭据或网络，监听会重试；凭据交由系统 Git 管理。
+- Ctrl+C / SIGTERM 会取消等待及当前命令。若在整合时中断，请运行 `git status` 检查状态。
 
-## 退出码
+没有跨进程仓库互斥锁，请勿对同一仓库同时运行多个 gsync。与其他 Git 程序并发修改时仍有竞争窗口。Git hooks、签名与 credential helper 由 Git 执行；标准输入继承，标准输出和错误被捕获。硬件密钥及交互式认证尚未全面验证，建议使用已有 SSH agent 或 credential helper。程序在前台持续运行，不自动安装系统后台服务。
 
-| 码 | 含义 |
-| --- | --- |
-| 0 | 成功或计划生成成功 |
-| 1 | 未分类错误或 Git 不可用 |
-| 2 | 参数错误 |
-| 3 | 不属于可用 Git 工作树 |
-| 4 | 不安全状态或策略禁止整合 |
-| 5 | 上游配置或比较异常 |
-| 6 | Fetch 失败 |
-| 7 | Rebase / Fast-forward 失败 |
-| 8 | Push 失败 |
-| 9 | 超时或取消（即使恢复也失败） |
+HTTP(S) URL 的 userinfo 凭据会脱敏，请勿在 URL 路径、查询参数或自定义输出中放置令牌。报告问题时附系统、Git/Go 版本、脱敏后的 `gsync --verbose` 日志和复现步骤。
 
-## 平台与限制
+## 退出码与开发
 
-代码面向 macOS、Linux、Windows；当前开发环境为 macOS，其他平台尚未实机验证。集成测试使用本地 bare remote，不访问公网。可在本地生成六个平台的发布包，尚未公开发布或提供后台定时同步。
+`--once` / `--dry-run` 的结果码：0 成功，1 未分类错误或 Git 不可用，2 参数错误，3 非 Git 仓库，4 不安全状态或分叉，5 上游配置异常，6 Fetch 失败，7 整合失败，9 超时或取消。内部引擎保留旧版 Push 失败码 8，当前 CLI 不执行 Push。
 
-没有仓库级互斥锁：请勿对同一仓库同时执行 gsync 或其他会修改历史的 Git 操作。检查和写入之间仍存在竞争窗口。Git hooks、签名及 credential helper 由 Git 运行，需自行确保可信。支持继承标准输入，标准输出和错误被捕获；优先使用现成 credential helper / SSH agent。硬件密钥、交互式密码和平台终端行为尚未全面验证。Push 不递归推送子模块，子模块应单独管理。
-
-错误日志会隐藏 HTTP(S) URL 的 userinfo 凭据；请勿在 URL 路径、查询参数或自定义 Git 输出中放置令牌。提交 Bug 时请提供系统、Go/Git 版本、脱敏后的 `gsync --verbose` 输出，以及可用本地测试仓库复现的步骤，勿附凭据。
-
-## 构建发布包
-
-在项目根目录执行：
+监听模式遇到可恢复问题会继续等待，不立即返回错误码；Ctrl+C 或 SIGTERM 退出返回 9。不可恢复错误返回对应退出码。
 
 ```sh
-go run ./cmd/release --version v0.1.0
+go test ./...
+go vet ./...
 ```
 
-生成 `dist/v0.1.0/`，包含 macOS / Linux / Windows 的 amd64、arm64 共六个压缩包，以及 `SHA256SUMS`。macOS 和 Linux 使用 tar.gz，Windows 使用 zip；每个包包含可执行文件与 README。构建关闭 CGO、注入版本并移除本地源码路径，不依赖额外打包工具。已有同版本目录时拒绝覆盖，失败时清理中间产物。可用 `--out <目录>` 指定输出位置。
+测试使用临时本地 bare remote，无需公网，包含监听重试、修改和分叉保护、恢复后拉取、取消等待。代码面向 macOS、Linux、Windows，目前仅在 macOS 实际运行，其他平台运行验证待 CI 执行。
 
-校验包文件：macOS 使用 `shasum -a 256 -c SHA256SUMS`，Linux 使用 `sha256sum -c SHA256SUMS`，Windows 可用 PowerShell `Get-FileHash <压缩包> -Algorithm SHA256` 与清单比对。解压后将可执行文件放入 PATH 目录，运行 `gsync --version` 检查。
+## 发布包
 
-GitHub Actions 的 `Build release archives` 工作流可手动输入版本并下载构建产物；它只生成 artifact，不自动创建 Release 或上传发布资产。跨平台编译通过不代表在所有系统上完成运行验证，运行验证以各平台 CI 结果为准。
+```sh
+go run ./cmd/release --version v0.2.0
+```
+
+生成 `dist/v0.2.0/`：macOS / Linux / Windows 的 amd64、arm64 六个平台包和 `SHA256SUMS`。Unix 平台为 tar.gz，Windows 为 zip，包含二进制和 README。关闭 CGO，注入版本并移除本地源码路径；同版本输出存在时拒绝覆盖。`--out <目录>` 可指定输出父目录。
+
+macOS 校验：`shasum -a 256 -c SHA256SUMS`；Linux：`sha256sum -c SHA256SUMS`；Windows：`Get-FileHash <压缩包> -Algorithm SHA256` 与清单比对。解压后将二进制放入 PATH，运行 `gsync --version` 检查。
+
+GitHub Actions 的 `Build release archives` 可手动输入版本并下载 artifact，不自动公开发布。交叉编译通过不等同于各平台运行验证。
