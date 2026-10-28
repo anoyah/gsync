@@ -1,6 +1,6 @@
 # gsync
 
-[English overview](README.en.md) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [更新记录](CHANGELOG.md) · [MIT License](LICENSE)
+[English overview](README.en.md) · [GitHub](https://github.com/anoyah/gsync) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [更新记录](CHANGELOG.md) · [MIT License](LICENSE)
 
 > 开发阶段项目：以后台自动拉取的可靠性为重点，TUI 为可选入口。macOS 已在本地测试；Linux / Windows 配有 CI，运行兼容性以实际 CI 结果为准。后台服务目前仅支持 macOS，不承诺生产环境 SLA。
 
@@ -17,7 +17,15 @@ go build -o gsync .
 go install .
 ```
 
-`go install .` 安装到 `GOBIN` 或 `$(go env GOPATH)/bin`，需将对应目录加入 PATH。卸载时删除安装的二进制。当前 module 为本地名称 `gsync`，远程安装地址尚未配置。
+`go install .` 安装到 `GOBIN` 或 `$(go env GOPATH)/bin`，需将对应目录加入 PATH。卸载时删除安装的二进制。Go module 路径为 `github.com/anoyah/gsync`，不包含仓库 URL 的 `.git` 后缀。
+
+代码上传到公开仓库后，也可远程安装：
+
+```sh
+go install github.com/anoyah/gsync@latest
+```
+
+`@latest` 安装最新可用版本；若有正式版本标签则按 Go 的版本选择规则解析。当前本地修改尚未上传，因此远程安装是否成功取决于 GitHub 上的实际内容。
 
 ## 使用
 
@@ -172,6 +180,6 @@ GitHub Actions 的 `Build release archives` 可手动输入版本并下载 artif
 
 项目使用 [MIT 许可证](LICENSE)，依赖许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；发布包同时包含这两个文件。Bug 和功能建议请使用仓库 Issue 模板；贡献前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题按 [SECURITY.md](SECURITY.md) 私下报告。
 
-当前 module 路径为 `gsync`，支持克隆后 `go install .`；尚未绑定 GitHub 地址，不提供猜测的远程安装命令。确定最终仓库 URL 后，应统一修改 go.mod 的 module 路径和源码中的 `gsync/...` 导入，再验证远程 `go install`。
+GitHub 仓库为 [anoyah/gsync](https://github.com/anoyah/gsync)，module 和内部导入已统一为 `github.com/anoyah/gsync`。支持克隆后 `go install .`，以及代码上传后的远程安装。此配置不会自动推送代码，也不会改变你已有的 Git remote。
 
 上传前检查 `git status` 和待提交内容，排除私有地址、凭据、个人日志、二进制与 `dist/`。不要连同 `.git` 目录打包上传；需要保留历史时，请另外审查历史中的敏感信息。现有内网 remote 不会写入普通源码上传，但不要把个人 `.git/config` 当项目配置提交。维护者可在 GitHub Settings 中开启私密漏洞报告，并为默认分支配置 CI 检查保护。

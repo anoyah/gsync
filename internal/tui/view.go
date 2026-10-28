@@ -7,7 +7,7 @@ import (
 	"time"
 	"unicode"
 
-	git "gsync/internal/git"
+	git "github.com/anoyah/gsync/internal/git"
 )
 
 type model struct {

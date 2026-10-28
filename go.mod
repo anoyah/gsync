@@ -1,4 +1,4 @@
-module gsync
+module github.com/anoyah/gsync
 
 go 1.22
 

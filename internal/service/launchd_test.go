@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"gsync/internal/lock"
+	"github.com/anoyah/gsync/internal/lock"
 )
 
 func setupManager(t *testing.T) (*Manager, string, Config) {

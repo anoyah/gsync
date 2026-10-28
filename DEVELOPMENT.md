@@ -47,7 +47,7 @@ make tui REPO=/path/to/disposable/repository
 
 ## GitHub 与发布
 
-项目尚未指定公开 GitHub URL，因此 module 路径仍是本地名称 gsync。维护者确定 URL 后，应统一修改 module 和内部导入，执行完整检查，再验证远程安装。不要提交本地 .git/config 或打包 .git 目录。
+公开仓库为 https://github.com/anoyah/gsync，module 和内部导入使用 github.com/anoyah/gsync，不包含 .git 后缀。上传代码后，再验证 go install github.com/anoyah/gsync@latest；本地检查不代替远程安装验证。不要提交本地 .git/config 或打包 .git 目录。
 
 CI 仅代表配置了检查，结果以实际 GitHub Actions 运行记录为准。不会自动创建 GitHub Release。开发阶段不生成发布包；发布时显式指定版本，包内包含 MIT 许可证与第三方声明。版本变更记录维护于 CHANGELOG.md；没有公开发布的内容记为 Unreleased。
 

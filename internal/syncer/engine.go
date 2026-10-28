@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	git "gsync/internal/git"
+	git "github.com/anoyah/gsync/internal/git"
 )
 
 type Options struct {

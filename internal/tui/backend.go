@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	git "gsync/internal/git"
-	"gsync/internal/service"
-	"gsync/internal/syncer"
+	git "github.com/anoyah/gsync/internal/git"
+	"github.com/anoyah/gsync/internal/service"
+	"github.com/anoyah/gsync/internal/syncer"
 )
 
 type Snapshot struct {

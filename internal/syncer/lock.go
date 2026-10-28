@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	git "gsync/internal/git"
-	"gsync/internal/lock"
+	git "github.com/anoyah/gsync/internal/git"
+	"github.com/anoyah/gsync/internal/lock"
 )
 
 func lockRepository(ctx context.Context, dir string, o Options) (*lock.Lock, error) {

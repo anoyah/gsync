@@ -1,6 +1,6 @@
 # gsync
 
-[中文文档](README.md) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT License](LICENSE)
+[中文文档](README.md) · [GitHub](https://github.com/anoyah/gsync) · [Contributing](CONTRIBUTING.md) · [Security](SECURITY.md) · [MIT License](LICENSE)
 
 A small, pull-only Git watcher. It fetches your current branch's configured upstream and applies remote changes only when they can be fast-forwarded. It never automatically commits, stashes, rebases or pushes through the public CLI.
 
@@ -20,7 +20,15 @@ gsync --dry-run --repo /path/to/repo
 gsync tui --repo /path/to/repo
 ```
 
-The module name is currently local (`gsync`); a public `go install …@latest` address is not configured yet. The optional TUI opens without starting a watcher: use `w` to toggle foreground watching, `s` / `x` to start / stop a macOS background service, and `q` to exit. Exiting the TUI stops its foreground watcher but leaves an independent background service running.
+The module path is `github.com/anoyah/gsync` (without `.git`). After this code is uploaded to the public repository, install remotely with:
+
+```sh
+go install github.com/anoyah/gsync@latest
+```
+
+Remote availability depends on the code actually published on GitHub; local changes are not uploaded automatically.
+
+The optional TUI opens without starting a watcher: use `w` to toggle foreground watching, `s` / `x` to start / stop a macOS background service, and `q` to exit. Exiting the TUI stops its foreground watcher but leaves an independent background service running.
 
 ```sh
 gsync start --repo /path/to/repo

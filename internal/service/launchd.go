@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	git "gsync/internal/git"
-	"gsync/internal/lock"
+	git "github.com/anoyah/gsync/internal/git"
+	"github.com/anoyah/gsync/internal/lock"
 )
 
 type Config struct {

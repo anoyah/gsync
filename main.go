@@ -13,11 +13,11 @@ import (
 	"syscall"
 	"time"
 
-	git "gsync/internal/git"
-	"gsync/internal/lock"
-	"gsync/internal/service"
-	"gsync/internal/syncer"
-	"gsync/internal/tui"
+	git "github.com/anoyah/gsync/internal/git"
+	"github.com/anoyah/gsync/internal/lock"
+	"github.com/anoyah/gsync/internal/service"
+	"github.com/anoyah/gsync/internal/syncer"
+	"github.com/anoyah/gsync/internal/tui"
 )
 
 var version = "dev"

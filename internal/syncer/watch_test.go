@@ -5,7 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"gsync/internal/lock"
+	"github.com/anoyah/gsync/internal/lock"
 	"io"
 	"os"
 	"path/filepath"
