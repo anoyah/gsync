@@ -41,21 +41,30 @@ func (r *Repository) Check(ctx context.Context) error {
 		return fmt.Errorf("当前为 detached HEAD；请先切换到本地分支: %w", err)
 	}
 	r.Branch = branch
-	for _, name := range []string{"MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD", "sequencer", "BISECT_LOG", "index.lock", "HEAD.lock"} {
-		p, err := r.Run(ctx, "rev-parse", "--git-path", name)
-		if err != nil {
-			return err
-		}
+	names := []string{"MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD", "sequencer", "BISECT_LOG", "index.lock", "HEAD.lock"}
+	args := []string{"rev-parse"}
+	for _, name := range names {
+		args = append(args, "--git-path", name)
+	}
+	resolved, err := r.Run(ctx, args...)
+	if err != nil {
+		return err
+	}
+	paths := strings.Split(resolved, "\n")
+	if len(paths) != len(names) {
+		return fmt.Errorf("无法可靠解析 Git 操作路径，已停止；请运行 git status 检查仓库")
+	}
+	for i, p := range paths {
 		if !filepath.IsAbs(p) {
 			p = filepath.Join(r.Dir, p)
 		}
 		if _, err = os.Stat(p); err == nil {
-			return fmt.Errorf("存在未完成的 Git 操作或锁 %s；请运行 git status 并完成或取消操作", name)
+			return fmt.Errorf("存在未完成的 Git 操作或锁 %s；请运行 git status 并完成或取消操作", names[i])
 		} else if !os.IsNotExist(err) {
 			return err
 		}
 	}
-	status, err := r.Run(ctx, "status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none")
+	status, err := r.Run(ctx, "--no-optional-locks", "status", "--porcelain=v1", "--untracked-files=all", "--ignore-submodules=none")
 	if err != nil {
 		return err
 	}

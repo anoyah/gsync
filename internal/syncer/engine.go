@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"strings"
 	"time"
 
 	git "gsync/internal/git"
@@ -55,16 +56,24 @@ func runUnlocked(ctx context.Context, dir string, o Options, w io.Writer) error 
 	if err := r.ResolveUpstream(ctx); err != nil {
 		return failure(5, err)
 	}
-	fmt.Fprintf(w, "项目：%s\n分支：%s\n远程：%s\n上游：%s\n[1/4] 检查仓库状态 完成\n", filepath.Base(r.Root), r.Branch, r.Remote, r.Upstream)
+	if o.Verbose {
+		fmt.Fprintf(w, "项目：%s\n分支：%s\n远程：%s\n上游：%s\n[1/4] 检查仓库状态 完成\n", filepath.Base(r.Root), r.Branch, r.Remote, r.Upstream)
+	} else {
+		fmt.Fprintf(w, "%s · %s → %s\n", filepath.Base(r.Root), r.Branch, strings.TrimPrefix(r.Upstream, "refs/remotes/"))
+	}
 	if _, err := r.Run(ctx, "fetch", "--no-prune", "--no-tags", "--", r.Remote, "+"+r.Target+":"+r.Upstream); err != nil {
 		return failure(6, fmt.Errorf("Fetch 失败；请检查网络、认证和 git remote -v: %w", err))
 	}
-	fmt.Fprintln(w, "[2/4] 获取远程更新 完成")
+	if o.Verbose {
+		fmt.Fprintln(w, "[2/4] 获取远程更新 完成")
+	}
 	a, b, err := r.Difference(ctx)
 	if err != nil {
 		return failure(5, fmt.Errorf("无法比较上游；请检查远程分支是否存在: %w", err))
 	}
-	fmt.Fprintf(w, "[3/4] 分析提交差异 本地领先 %d，远程领先 %d\n", a, b)
+	if o.Verbose || o.DryRun {
+		fmt.Fprintf(w, "[3/4] 分析提交差异 本地领先 %d，远程领先 %d\n", a, b)
+	}
 	action := "无需操作"
 	if a > 0 && b == 0 && o.NoPush {
 		action = "保留本地提交，不推送"
@@ -88,6 +97,11 @@ func runUnlocked(ctx context.Context, dir string, o Options, w io.Writer) error 
 	if o.DryRun {
 		fmt.Fprintf(w, "计划：%s\nDry-run：已 Fetch，未执行整合或 Push。\n", action)
 		return nil
+	}
+	// Nothing can modify local files or history in this case. Preserve the
+	// checks around actual writes, but avoid rescanning an idle worktree twice.
+	if b == 0 && (a == 0 || o.NoPush) {
+		return finish(ctx, &r, o, w, a, b, action)
 	}
 	// Recheck safety after fetching, which can take arbitrarily long.
 	branch := r.Branch
@@ -134,20 +148,28 @@ func runUnlocked(ctx context.Context, dir string, o Options, w io.Writer) error 
 			return failure(8, fmt.Errorf("Push 失败；请检查权限或重新运行 gsync 获取最新远程状态: %w", err))
 		}
 	}
-	a, b, err = r.Difference(ctx)
-	if err != nil {
-		return failure(1, err)
+	// Push updates the tracking ref; only that path needs another count.
+	if a > 0 && !o.NoPush {
+		a, b, err = r.Difference(ctx)
+		if err != nil {
+			return failure(1, err)
+		}
 	}
-	if o.NoPush && a > 0 {
-		fmt.Fprintln(w, "[4/4] 远程更新已检查，保留本地提交，不推送")
-	} else {
-		fmt.Fprintln(w, "[4/4] 同步完成")
-	}
-	fmt.Fprintf(w, "本地领先：%d，远程领先：%d\n", a, b)
+	return finish(ctx, &r, o, w, a, b, action)
+}
+
+func finish(ctx context.Context, r *git.Repository, o Options, w io.Writer, a, b int, action string) error {
 	head, err := r.Run(ctx, "rev-parse", "--short", "HEAD")
 	if err != nil {
 		return failure(1, err)
 	}
-	fmt.Fprintln(w, "当前提交：", head)
+	if o.NoPush && a > 0 {
+		fmt.Fprintln(w, "✓ 已检查远程更新，保留本地提交，不推送。")
+	} else if action == "无需操作" {
+		fmt.Fprintln(w, "✓ 已与上游一致，无需拉取。")
+	} else {
+		fmt.Fprintf(w, "✓ %s 完成。\n", action)
+	}
+	fmt.Fprintf(w, "当前提交：%s · 本地领先 %d · 远程领先 %d\n", head, a, b)
 	return nil
 }

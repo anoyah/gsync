@@ -124,8 +124,12 @@ func run(ctx context.Context, args []string, out, errOut io.Writer) int {
 		err = syncer.Watch(ctx, dir, o, interval, out, errOut)
 	}
 	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			fmt.Fprintln(errOut, "操作已停止；如在拉取中中断，请运行 git status 检查状态。")
+			return 9
+		}
 		fmt.Fprintln(errOut, "✗", err)
-		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		if errors.Is(err, context.DeadlineExceeded) {
 			return 9
 		}
 		if errors.Is(err, lock.ErrBusy) {

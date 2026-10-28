@@ -311,3 +311,53 @@ func TestStagedChangesPreserved(t *testing.T) {
 		t.Fatal("staged changes modified")
 	}
 }
+
+func TestIdleCycleUsesOneSafetyScan(t *testing.T) {
+	f := setup(t)
+	out := execute(t, f.local, Options{Verbose: true, NoPush: true, NoRebase: true}, 0)
+	count := 0
+	for _, line := range strings.Split(out, "\n") {
+		if strings.HasPrefix(line, "  git ") {
+			count++
+		}
+	}
+	if count > 9 {
+		t.Fatalf("idle cycle spawned %d traced commands, want at most 9\n%s", count, out)
+	}
+	if strings.Count(out, "--git-path MERGE_HEAD") != 1 || strings.Count(out, "status --porcelain") != 1 {
+		t.Fatal("idle safety scan repeated")
+	}
+	t.Logf("idle cycle: %d Git commands (excluding lock preparation)", count)
+}
+
+func TestBatchedSafetyScanDetectsEveryMarker(t *testing.T) {
+	f := setup(t)
+	for _, name := range []string{"MERGE_HEAD", "rebase-merge", "rebase-apply", "CHERRY_PICK_HEAD", "REVERT_HEAD", "sequencer", "BISECT_LOG", "index.lock", "HEAD.lock"} {
+		path := filepath.Join(f.local, ".git", name)
+		if err := os.WriteFile(path, []byte("in progress"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		execute(t, f.local, Options{NoPush: true, NoRebase: true}, 4)
+		if err := os.Remove(path); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
+func TestFastForwardRetainsFinalSafetyScan(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("requires POSIX Git hook")
+	}
+	f := setup(t)
+	f.commit(f.peer, "remote", "remote update")
+	f.git(f.peer, "push")
+	hook := filepath.Join(f.local, ".git", "hooks", "post-merge")
+	if err := os.WriteFile(hook, []byte("#!/bin/sh\nprintf 'hook modification' > base\n"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	execute(t, f.local, Options{NoPush: true, NoRebase: true}, 4)
+	data, err := os.ReadFile(filepath.Join(f.local, "base"))
+	if err != nil || string(data) != "hook modification" {
+		t.Fatal("post-merge modification was not preserved")
+	}
+}

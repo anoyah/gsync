@@ -35,3 +35,15 @@ func TestNonInteractiveRunner(t *testing.T) {
 		t.Fatalf("isolated Git command failed: %s %v", out, err)
 	}
 }
+
+func TestCancellationAndTimeoutHints(t *testing.T) {
+	for _, tc := range []struct {
+		cause error
+		hint  string
+	}{{context.Canceled, "操作已取消"}, {context.DeadlineExceeded, "--timeout"}} {
+		err := &Error{Args: []string{"fetch", "origin"}, Cause: tc.cause}
+		if !errors.Is(err, tc.cause) || !strings.Contains(err.Error(), tc.hint) {
+			t.Fatalf("missing useful hint: %v", err)
+		}
+	}
+}

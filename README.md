@@ -1,5 +1,9 @@
 # gsync
 
+[English overview](README.en.md) · [贡献指南](CONTRIBUTING.md) · [安全政策](SECURITY.md) · [更新记录](CHANGELOG.md) · [MIT License](LICENSE)
+
+> 开发阶段项目：以后台自动拉取的可靠性为重点，TUI 为可选入口。macOS 已在本地测试；Linux / Windows 配有 CI，运行兼容性以实际 CI 结果为准。后台服务目前仅支持 macOS，不承诺生产环境 SLA。
+
 持续监听当前 Git 仓库的上游分支，自动从服务器拉取更新。不带参数启动时仅输出可用命令和示例，然后退出。持续监听每轮完成等待 30 秒再次检查，Ctrl+C 停止。同步通过系统 Git 执行，采用跨平台轮询；TUI 使用轻量的 `golang.org/x/term` 处理终端状态。
 
 **只拉取，不自动提交、不 Push、不 Rebase。** 远程更新仅通过 Fast-forward 整合；未提交文件、本地提交和分叉历史不会被自动覆盖。
@@ -16,6 +20,31 @@ go install .
 `go install .` 安装到 `GOBIN` 或 `$(go env GOPATH)/bin`，需将对应目录加入 PATH。卸载时删除安装的二进制。当前 module 为本地名称 `gsync`，远程安装地址尚未配置。
 
 ## 使用
+
+### 使用 Makefile 开发
+
+需要 GNU Make 和常见的 POSIX shell 工具；macOS、Linux 可直接使用，Windows 可在 Git Bash / MSYS2 中使用 GNU Make，或继续使用 Go 命令。
+
+```sh
+make                          # 仅显示开发命令
+make build                    # 编译本地程序，不打包
+make run                      # 编译并输出操作说明
+make run ARGS="--version"
+make tui REPO="/path with spaces/repository"
+make watch REPO=/path/to/repository INTERVAL=5s
+make check                    # 格式检查 + go vet + 全部测试
+make test-race
+make coverage                 # 生成 coverage.out
+make fmt                      # 主动格式化源码
+make install                  # 安装到 Go 二进制目录
+make clean                    # 清理本地程序和覆盖率文件，保留 dist
+```
+
+可覆盖 `GO`、`VERSION`（默认 `dev`）、`BINARY`（默认当前平台的 `gsync` / `gsync.exe`）、`REPO`、`INTERVAL` 和 `ARGS`。`BINARY` 使用项目根目录下的文件名；自定义名称的产物自行清理。`ARGS` 是命令行片段，仅传入自己信任的参数；含空格的仓库路径优先通过 `REPO` 传入。`test-race` 需要平台支持的竞态检测工具链。格式检查不修改文件，`make fmt` 才会修改 Go 源码。
+
+发布包只在手动执行 `make release VERSION=v0.2.1` 时生成，可用 `DIST` 指定输出父目录；未提供版本时直接报错。默认目标及日常开发流程均不生成发布包。
+
+### 直接运行
 
 ```sh
 cd /path/to/repository
@@ -75,7 +104,11 @@ gsync stop --repo /path/to/repository
 
 `stop` 卸载服务并删除登录启动配置，保留程序副本与日志；如需完全清理，可按 `status` 展示的仓库标识手动删除对应副本目录和日志。`logs` 默认显示最后 100 行，最多读取末尾 64 KiB；日志暂未自动轮转。后台不会继承终端输入，HTTPS 交互提示被禁用，请先配置可非交互使用的 credential helper / SSH agent。服务保存启动时的 PATH，不保存令牌或 SSH agent socket。
 
-`-v` 等价于 `--verbose`，`-h` 等价于 `--help`。`--interval` 必须大于 0，默认 `30s`；`--timeout` 默认 `2m`。启动后立即检查一次，每轮执行结束才开始等待间隔，不会重叠执行同步。检测延迟取决于间隔和 Git 执行耗时。相同状态和错误不会持续刷屏，`--verbose` 可显示每轮诊断。
+`-v` 等价于 `--verbose`，`-h` 等价于 `--help`。`--interval` 必须大于 0，默认 `30s`；`--timeout` 默认 `2m`。启动后立即检查一次，每轮执行结束才开始等待间隔，不会重叠执行同步。检测延迟取决于间隔和 Git 执行耗时。普通输出仅显示仓库、处理结果和当前提交摘要；`--verbose` 显示逐阶段操作和 Git 命令。相同状态和错误不会持续刷屏。
+
+Fetch / 网络错误与命令超时会逐次将等待间隔加倍，最大为 5 分钟（若配置间隔超过 5 分钟，则维持配置值）；日志会说明下一次检查的等待时间。检查成功后恢复原间隔。未提交修改、分叉、缺少上游等本地状态仍按原间隔检查。需要立即重试时可停止并重新启动监听。
+
+空闲检查不重复扫描工作区；执行任何整合或推送前的安全检查仍保留。TUI 仅在数据、窗口尺寸或交互状态变化时重新排版，通常只更新发生变化的行；日志换行结果按内容和宽度缓存，以降低长期运行的 CPU 与内存分配开销。
 
 默认监听当前分支的已配置上游。切换分支后，下一轮重新识别分支与上游。`--dry-run` 固定只执行一轮，会更新远程跟踪引用及 FETCH_HEAD，但不修改工作区、整合提交或推送。Fetch 不 prune、不自动获取标签；上游分支被删除时报告错误，等待修复配置。
 
@@ -129,8 +162,16 @@ go vet ./...
 go run ./cmd/release --version v0.2.0
 ```
 
-生成 `dist/v0.2.0/`：macOS / Linux / Windows 的 amd64、arm64 六个平台包和 `SHA256SUMS`。Unix 平台为 tar.gz，Windows 为 zip，包含二进制和 README。关闭 CGO，注入版本并移除本地源码路径；同版本输出存在时拒绝覆盖。`--out <目录>` 可指定输出父目录。
+生成 `dist/v0.2.0/`：macOS / Linux / Windows 的 amd64、arm64 六个平台包和 `SHA256SUMS`。Unix 平台为 tar.gz，Windows 为 zip，包含二进制、README、LICENSE 和第三方许可证声明。关闭 CGO，注入版本并移除本地源码路径；同版本输出存在时拒绝覆盖。`--out <目录>` 可指定输出父目录。
 
 macOS 校验：`shasum -a 256 -c SHA256SUMS`；Linux：`sha256sum -c SHA256SUMS`；Windows：`Get-FileHash <压缩包> -Algorithm SHA256` 与清单比对。解压后将二进制放入 PATH，运行 `gsync --version` 检查。
 
 GitHub Actions 的 `Build release archives` 可手动输入版本并下载 artifact，不自动公开发布。交叉编译通过不等同于各平台运行验证。
+
+## 开源与上传 GitHub
+
+项目使用 [MIT 许可证](LICENSE)，依赖许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)；发布包同时包含这两个文件。Bug 和功能建议请使用仓库 Issue 模板；贡献前阅读 [CONTRIBUTING.md](CONTRIBUTING.md)，安全问题按 [SECURITY.md](SECURITY.md) 私下报告。
+
+当前 module 路径为 `gsync`，支持克隆后 `go install .`；尚未绑定 GitHub 地址，不提供猜测的远程安装命令。确定最终仓库 URL 后，应统一修改 go.mod 的 module 路径和源码中的 `gsync/...` 导入，再验证远程 `go install`。
+
+上传前检查 `git status` 和待提交内容，排除私有地址、凭据、个人日志、二进制与 `dist/`。不要连同 `.git` 目录打包上传；需要保留历史时，请另外审查历史中的敏感信息。现有内网 remote 不会写入普通源码上传，但不要把个人 `.git/config` 当项目配置提交。维护者可在 GitHub Settings 中开启私密漏洞报告，并为默认分支配置 CI 检查保护。

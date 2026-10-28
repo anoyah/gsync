@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 )
 
@@ -31,6 +32,7 @@ func watch(ctx context.Context, interval time.Duration, verbose bool, out, errOu
 	}
 	fmt.Fprintf(out, "正在持续监听，每轮完成后等待 %s；Ctrl+C 停止。\n", interval)
 	last := ""
+	delay := interval
 	for {
 		if ctx.Err() != nil {
 			return failure(9, ctx.Err())
@@ -38,8 +40,7 @@ func watch(ctx context.Context, interval time.Duration, verbose bool, out, errOu
 		var buf bytes.Buffer
 		err := cycle(ctx, &buf)
 		if ctx.Err() != nil {
-			// Preserve recovery diagnostics if interrupted during a rebase.
-			if err != nil {
+			if err != nil && verbose {
 				fmt.Fprintln(errOut, err)
 			}
 			return failure(9, ctx.Err())
@@ -54,20 +55,25 @@ func watch(ctx context.Context, interval time.Duration, verbose bool, out, errOu
 				fmt.Fprint(out, buf.String())
 			}
 			if err != nil {
-				fmt.Fprintln(errOut, "暂停本轮同步：", err)
+				fmt.Fprintln(errOut, "本轮未拉取：", err)
 			}
-			if err == nil && len(last) > 6 && last[:6] == "error:" {
-				fmt.Fprintln(out, "仓库已恢复，继续自动同步。")
+			if err == nil && strings.HasPrefix(last, "error:") {
+				fmt.Fprintln(out, "仓库已恢复，继续自动拉取。")
 			}
 		}
-		last = key
 		if err != nil {
 			var syncErr *Error
 			if !errors.As(err, &syncErr) || syncErr.Code == 1 || syncErr.Code == 3 || syncErr.Code == 7 {
-				return fmt.Errorf("监听已停止；请处理错误后重新启动 gsync: %w", err)
+				return fmt.Errorf("监听已停止；请处理错误后重新运行 gsync watch: %w", err)
 			}
 		}
-		timer := time.NewTimer(interval)
+		next := retryDelay(interval, delay, err)
+		if err != nil && (next != delay || key != last) {
+			fmt.Fprintf(errOut, "下次检查将在 %s 后进行；修复后会自动继续。\n", next)
+		}
+		delay = next
+		last = key
+		timer := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -75,4 +81,21 @@ func watch(ctx context.Context, interval time.Duration, verbose bool, out, errOu
 		case <-timer.C:
 		}
 	}
+}
+
+// Local safety problems stay responsive. Only failed network/timeout cycles
+// back off; successful checks immediately restore the configured interval.
+func retryDelay(base, current time.Duration, err error) time.Duration {
+	var e *Error
+	if !errors.As(err, &e) || (e.Code != 6 && e.Code != 9) {
+		return base
+	}
+	limit := 5 * time.Minute
+	if base > limit {
+		limit = base
+	}
+	if current >= limit/2 {
+		return limit
+	}
+	return current * 2
 }

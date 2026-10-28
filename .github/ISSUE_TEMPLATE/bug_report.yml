@@ -1,0 +1,32 @@
+name: Bug report / 缺陷报告
+description: Report a reproducible problem without secrets.
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: Please read SECURITY.md for sensitive security reports. Never include tokens or private repository data.
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment / 环境
+      description: OS, terminal, gsync version or commit, Go and Git versions.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction / 复现步骤
+      description: Include the command and, if possible, disposable local repository setup.
+    validations:
+      required: true
+  - type: textarea
+    id: behavior
+    attributes:
+      label: Expected and actual behavior / 预期与实际行为
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Sanitized diagnostics / 脱敏日志
+      description: Review verbose output for credentials before posting. For TUI problems include terminal dimensions.

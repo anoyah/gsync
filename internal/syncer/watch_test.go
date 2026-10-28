@@ -185,3 +185,27 @@ func TestLinkedWorktreesShareLock(t *testing.T) {
 	}
 	execute(t, dir, Options{NoPush: true, NoRebase: true}, 0)
 }
+
+func TestNetworkBackoffAndRecovery(t *testing.T) {
+	base := 30 * time.Second
+	delay := base
+	err := failure(6, fmt.Errorf("offline"))
+	for _, want := range []time.Duration{time.Minute, 2 * time.Minute, 4 * time.Minute, 5 * time.Minute, 5 * time.Minute} {
+		delay = retryDelay(base, delay, err)
+		if delay != want {
+			t.Fatalf("delay=%v want=%v", delay, want)
+		}
+	}
+	if retryDelay(base, delay, nil) != base {
+		t.Fatal("successful check did not reset backoff")
+	}
+	if retryDelay(base, delay, failure(4, fmt.Errorf("dirty"))) != base {
+		t.Fatal("local edits should use normal polling interval")
+	}
+	if retryDelay(10*time.Minute, 10*time.Minute, err) != 10*time.Minute {
+		t.Fatal("backoff shortened configured interval")
+	}
+	if retryDelay(base, base, failure(9, context.DeadlineExceeded)) != time.Minute {
+		t.Fatal("timeout should back off")
+	}
+}

@@ -20,6 +20,8 @@ type model struct {
 	background                 bool
 	backgroundLog              bool
 	spin                       int
+	logRevision                uint64
+	logCache                   logLayout
 }
 
 // Never allow Git output, file names, or log lines to inject terminal controls.
@@ -68,6 +70,7 @@ func clip(s string, width int) string {
 }
 
 func (m *model) appendLog(s string) {
+	m.logRevision++
 	for _, line := range strings.Split(strings.TrimSuffix(safe(s), "\n"), "\n") {
 		if line != "" {
 			// Keep individual diagnostics bounded as well as the line count.
@@ -82,7 +85,7 @@ func (m *model) appendLog(s string) {
 	}
 }
 
-func (m model) view(width, height int) string {
+func (m *model) view(width, height int) string {
 	c := newCanvas(width-1, height-1)
 	if c.width < 10 || c.height < 4 {
 		c.put(0, 0, "GSYNC · q 退出", muted, c.width)
@@ -241,7 +244,7 @@ func (m model) sidebar(c *canvas, width int) {
 	}
 }
 
-func (m model) logPane(c *canvas, x, y, width int) {
+func (m *model) logPane(c *canvas, x, y, width int) {
 	source := m.backgroundLog || !m.foreground && len(m.local) == 0
 	a, b := selected, muted
 	if source {
@@ -278,7 +281,7 @@ func (m model) logPane(c *canvas, x, y, width int) {
 		c.right(x+width, c.height-5, "暂无记录", faint)
 		return
 	}
-	entries := wrapLogs(logs, width-6)
+	entries := m.layoutLogs(logs, width-6, source)
 	offset := m.offset
 	max := len(entries) - available
 	if max < 0 {
@@ -355,6 +358,26 @@ type logEntry struct {
 	text      string
 	number    int
 	continued bool
+}
+
+type logLayout struct {
+	width      int
+	background bool
+	revision   uint64
+	content    string
+	entries    []logEntry
+}
+
+func (m *model) layoutLogs(logs []string, width int, background bool) []logEntry {
+	c := &m.logCache
+	content := ""
+	if background {
+		content = m.snapshot.Logs
+	}
+	if c.entries == nil || c.width != width || c.background != background || background && c.content != content || !background && c.revision != m.logRevision {
+		*c = logLayout{width: width, background: background, revision: m.logRevision, content: content, entries: wrapLogs(logs, width)}
+	}
+	return c.entries
 }
 
 func wrapLogs(lines []string, width int) []logEntry {

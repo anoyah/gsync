@@ -42,6 +42,14 @@ func build(version, parent string, log io.Writer) error {
 	if err != nil {
 		return err
 	}
+	license, err := os.ReadFile("LICENSE")
+	if err != nil {
+		return err
+	}
+	notices, err := os.ReadFile("THIRD_PARTY_NOTICES.md")
+	if err != nil {
+		return err
+	}
 	if err := os.MkdirAll(parent, 0755); err != nil {
 		return err
 	}
@@ -78,7 +86,7 @@ func build(version, parent string, log io.Writer) error {
 			ext = ".zip"
 		}
 		filename := "gsync_" + version + "_" + t.os + "_" + t.arch + ext
-		archive, err := pack(name, data, readme, t.os == "windows")
+		archive, err := pack(name, data, readme, license, notices, t.os == "windows")
 		if err != nil {
 			return err
 		}
@@ -101,12 +109,12 @@ func build(version, parent string, log io.Writer) error {
 	return nil
 }
 
-func pack(binary string, data, readme []byte, windows bool) ([]byte, error) {
+func pack(binary string, data, readme, license, notices []byte, windows bool) ([]byte, error) {
 	files := []struct {
 		name string
 		data []byte
 		mode int64
-	}{{binary, data, 0755}, {"README.md", readme, 0644}}
+	}{{binary, data, 0755}, {"README.md", readme, 0644}, {"LICENSE", license, 0644}, {"THIRD_PARTY_NOTICES.md", notices, 0644}}
 	var buf bytes.Buffer
 	// Fixed metadata makes packaging the same build reproducible.
 	stamp := time.Date(2000, 1, 1, 0, 0, 0, 0, time.UTC)

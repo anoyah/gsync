@@ -15,7 +15,7 @@ func TestArchives(t *testing.T) {
 		if windows {
 			name += ".exe"
 		}
-		data, err := pack(name, []byte("binary"), []byte("readme"), windows)
+		data, err := pack(name, []byte("binary"), []byte("readme"), []byte("license"), []byte("notices"), windows)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -62,7 +62,7 @@ func TestArchives(t *testing.T) {
 				}
 			}
 		}
-		if len(files) != 2 || files[name] != "binary" || files["README.md"] != "readme" {
+		if len(files) != 4 || files[name] != "binary" || files["README.md"] != "readme" || files["LICENSE"] != "license" || files["THIRD_PARTY_NOTICES.md"] != "notices" {
 			t.Fatalf("invalid archive: %v", files)
 		}
 	}

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -117,14 +118,24 @@ func runLoop(parent context.Context, b Backend, interval time.Duration, keys <-c
 	poll := time.NewTicker(2 * time.Second)
 	defer poll.Stop()
 	lastFrame := ""
+	dirty := true
+	lastWidth, lastHeight := 0, 0
 	for {
 		width, height := size()
-		frame := m.view(width, height)
-		if frame != lastFrame {
-			if _, err := io.WriteString(out, frame); err != nil {
-				return err
+		if dirty || width != lastWidth || height != lastHeight {
+			frame := m.view(width, height)
+			previous := lastFrame
+			if width != lastWidth || height != lastHeight {
+				previous = ""
+			}
+			if patch := frameDiff(previous, frame); patch != "" {
+				if _, err := io.WriteString(out, patch); err != nil {
+					return err
+				}
 			}
 			lastFrame = frame
+			lastWidth, lastHeight = width, height
+			dirty = false
 		}
 		select {
 		case <-ctx.Done():
@@ -132,10 +143,12 @@ func runLoop(parent context.Context, b Backend, interval time.Duration, keys <-c
 		case <-clock.C:
 			if m.busy {
 				m.spin++
+				dirty = true
 			}
 		case <-poll.C:
 			refresh()
 		case key, ok := <-keys:
+			dirty = true
 			if !ok || key == "quit" {
 				m.notice = "正在退出，等待任务安全结束…"
 				w, h := size()
@@ -197,6 +210,7 @@ func runLoop(parent context.Context, b Backend, interval time.Duration, keys <-c
 				}
 			}
 		case e := <-events:
+			dirty = true
 			switch e.kind {
 			case "snapshot":
 				refreshing = false
@@ -204,6 +218,9 @@ func runLoop(parent context.Context, b Backend, interval time.Duration, keys <-c
 					m.notice = "刷新失败：" + e.err.Error()
 				} else {
 					m.snapshot = e.snapshot
+					if strings.HasPrefix(m.notice, "刷新失败：") {
+						m.notice = "状态读取已恢复"
+					}
 				}
 			case "log":
 				m.appendLog(e.text)
@@ -222,6 +239,9 @@ func runLoop(parent context.Context, b Backend, interval time.Duration, keys <-c
 				m.busy = false
 				if e.err != nil {
 					m.notice = "操作失败：" + e.err.Error()
+					m.appendLog(m.notice)
+					m.backgroundLog = false
+					m.offset = 0
 				} else {
 					m.notice = e.text
 					if e.kind == "start" {

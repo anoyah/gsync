@@ -111,6 +111,7 @@ func (c *canvas) shortcut(x, y int, key, label string, role tone, limit int) int
 }
 func (c *canvas) render() string {
 	var b strings.Builder
+	b.Grow(c.width * c.height * 2)
 	b.WriteString("\x1b[H")
 	for y, row := range c.cells {
 		b.WriteString(colors[text])

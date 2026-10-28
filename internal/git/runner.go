@@ -3,6 +3,7 @@ package git
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -27,13 +28,35 @@ type Error struct {
 }
 
 func (e *Error) Error() string {
-	return Redact(fmt.Sprintf("git %s: %s (%v)", strings.Join(e.Args, " "), e.Output, e.Cause))
+	detail := strings.TrimSpace(e.Output)
+	reason := ""
+	switch {
+	case errors.Is(e.Cause, context.Canceled):
+		reason = "操作已取消"
+	case errors.Is(e.Cause, context.DeadlineExceeded):
+		reason = "已超过单条命令超时限制，可使用 --timeout 调整"
+	case detail == "":
+		detail = fmt.Sprint(e.Cause)
+	}
+	if reason != "" {
+		if detail != "" {
+			detail = reason + "\n" + detail
+		} else {
+			detail = reason
+		}
+	}
+	return Redact(fmt.Sprintf("git %s: %s", strings.Join(e.Args, " "), detail))
 }
 func (e *Error) Unwrap() error { return e.Cause }
 
 var credentials = regexp.MustCompile(`(https?://)[^\s/@]+@`)
 
-func Redact(s string) string { return credentials.ReplaceAllString(s, "${1}[redacted]@") }
+func Redact(s string) string {
+	if !strings.Contains(s, "://") {
+		return s
+	}
+	return credentials.ReplaceAllString(s, "${1}[redacted]@")
+}
 func (r Runner) Run(ctx context.Context, args ...string) (string, error) {
 	ctx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
