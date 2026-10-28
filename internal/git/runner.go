@@ -14,9 +14,10 @@ import (
 
 // Runner executes Git directly, with a separate deadline for every command.
 type Runner struct {
-	Dir     string
-	Timeout time.Duration
-	Trace   io.Writer
+	Dir            string
+	Timeout        time.Duration
+	Trace          io.Writer
+	NonInteractive bool
 }
 type Error struct {
 	Args   []string
@@ -42,6 +43,11 @@ func (r Runner) Run(ctx context.Context, args ...string) (string, error) {
 	cmd := exec.CommandContext(ctx, "git", args...)
 	cmd.Dir = r.Dir
 	cmd.Stdin = os.Stdin
+	if r.NonInteractive {
+		cmd.Stdin = nil
+		cmd.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+		isolateTerminal(cmd)
+	}
 	// Keep stdout separate so successful Git diagnostics cannot corrupt parsers.
 	var out, diagnostic bytes.Buffer
 	cmd.Stdout = &out

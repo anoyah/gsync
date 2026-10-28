@@ -23,6 +23,18 @@ func (r *Repository) Discover(ctx context.Context) error {
 	r.Dir = root
 	return nil
 }
+
+// CommonDir identifies a repository across all its linked worktrees.
+func (r *Repository) CommonDir(ctx context.Context) (string, error) {
+	p, err := r.Run(ctx, "rev-parse", "--git-common-dir")
+	if err != nil {
+		return "", err
+	}
+	if !filepath.IsAbs(p) {
+		p = filepath.Join(r.Dir, p)
+	}
+	return filepath.EvalSymlinks(p)
+}
 func (r *Repository) Check(ctx context.Context) error {
 	branch, err := r.Run(ctx, "symbolic-ref", "--quiet", "--short", "HEAD")
 	if err != nil {

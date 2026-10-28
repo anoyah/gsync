@@ -15,8 +15,13 @@ func Watch(ctx context.Context, dir string, o Options, interval time.Duration, o
 	// Watching is pull-only, regardless of the options of a one-shot engine.
 	o.NoPush = true
 	o.NoRebase = true
+	l, err := lockRepository(ctx, dir, o)
+	if err != nil {
+		return err
+	}
+	defer l.Close()
 	return watch(ctx, interval, o.Verbose, out, errOut, func(ctx context.Context, w io.Writer) error {
-		return Run(ctx, dir, o, w)
+		return runUnlocked(ctx, dir, o, w)
 	})
 }
 

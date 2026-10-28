@@ -28,3 +28,10 @@ func TestErrorRedactsArguments(t *testing.T) {
 		t.Fatal("credentials leaked")
 	}
 }
+
+func TestNonInteractiveRunner(t *testing.T) {
+	r := Runner{Dir: t.TempDir(), Timeout: time.Second, NonInteractive: true}
+	if out, err := r.Run(context.Background(), "--version"); err != nil || !strings.HasPrefix(out, "git version") {
+		t.Fatalf("isolated Git command failed: %s %v", out, err)
+	}
+}

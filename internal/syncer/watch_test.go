@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"gsync/internal/lock"
 	"io"
 	"os"
 	"path/filepath"
@@ -167,4 +168,20 @@ func TestWatchForcesPullOnly(t *testing.T) {
 	if f.git(f.remote, "rev-parse", "topic") != remote {
 		t.Fatal("watch pushed local commits")
 	}
+}
+
+func TestLinkedWorktreesShareLock(t *testing.T) {
+	f := setup(t)
+	dir := filepath.Join(f.root, "linked")
+	f.git(f.local, "worktree", "add", "-b", "linked", dir, "topic")
+	f.git(dir, "branch", "--set-upstream-to=origin/topic")
+	l, err := lock.Acquire(filepath.Join(f.local, ".git", "gsync.lock"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	execute(t, dir, Options{NoPush: true, NoRebase: true}, 4)
+	if err := l.Close(); err != nil {
+		t.Fatal(err)
+	}
+	execute(t, dir, Options{NoPush: true, NoRebase: true}, 0)
 }

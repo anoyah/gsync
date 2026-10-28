@@ -14,6 +14,7 @@ import (
 type Options struct {
 	DryRun, NoPush, NoRebase, Verbose bool
 	Timeout                           time.Duration
+	NonInteractive                    bool
 }
 type Error struct {
 	Code int
@@ -29,7 +30,16 @@ func failure(code int, err error) error {
 	return &Error{code, err}
 }
 func Run(ctx context.Context, dir string, o Options, w io.Writer) error {
-	r := git.Repository{Runner: git.Runner{Dir: dir, Timeout: o.Timeout}}
+	l, err := lockRepository(ctx, dir, o)
+	if err != nil {
+		return err
+	}
+	defer l.Close()
+	return runUnlocked(ctx, dir, o, w)
+}
+
+func runUnlocked(ctx context.Context, dir string, o Options, w io.Writer) error {
+	r := git.Repository{Runner: git.Runner{Dir: dir, Timeout: o.Timeout, NonInteractive: o.NonInteractive}}
 	if o.Verbose {
 		r.Trace = w
 	}

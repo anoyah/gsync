@@ -58,7 +58,12 @@ func TestCLIWatchPullOnly(t *testing.T) {
 		t.Fatalf("build: %v\n%s", err, b)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-	cmd := exec.CommandContext(ctx, binary, "--interval=20ms")
+	menuCmd := exec.Command(binary)
+	menuCmd.Dir = root
+	if b, err := menuCmd.CombinedOutput(); err != nil || !strings.Contains(string(b), "打开交互面板") || !strings.Contains(string(b), "gsync watch") {
+		t.Fatalf("menu: %v\n%s", err, b)
+	}
+	cmd := exec.CommandContext(ctx, binary, "watch", "--interval=20ms")
 	cmd.Dir = local
 	var output bytes.Buffer
 	cmd.Stdout = &output
@@ -100,6 +105,16 @@ func TestCLIWatchPullOnly(t *testing.T) {
 	git(peer, "push")
 	waitForHead(git(peer, "rev-parse", "HEAD"))
 	// An unpushed local commit must survive both one-shot and watch modes.
+	duplicate := exec.Command(binary, "--once")
+	duplicate.Dir = local
+	if b, err := duplicate.CombinedOutput(); err == nil {
+		t.Fatalf("second process was allowed: %s", b)
+	} else {
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 4 {
+			t.Fatalf("duplicate process: %v\n%s", err, b)
+		}
+	}
 	commit(local, "local", "local only")
 	remoteHead := git(remote, "rev-parse", "topic")
 	if runtime.GOOS != "windows" {
